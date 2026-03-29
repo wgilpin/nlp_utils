@@ -1,4 +1,4 @@
-"""PDF fetching utilities — fetch and extract text from a PDF URL."""
+"""PDF and URL fetching utilities — fetch and extract text from PDFs and URLs."""
 
 import base64
 import logging
@@ -10,6 +10,55 @@ from pypdf import PdfReader
 logger = logging.getLogger(__name__)
 
 _USER_AGENT = "Mozilla/5.0 (compatible; nlp-utils/1.0)"
+
+
+def extract_pdf_text_from_bytes(data: bytes) -> str:
+    """Extract text from raw PDF bytes via pypdf.
+
+    Raises:
+        ValueError: if no text could be extracted (image-only PDF).
+    """
+    reader = PdfReader(BytesIO(data))
+    page_count = len(reader.pages)
+    logger.debug("PDF has %d pages", page_count)
+
+    pages: list[str] = []
+    for i, page in enumerate(reader.pages):
+        page_text = page.extract_text() or ""
+        if not page_text:
+            logger.warning("PDF page %d/%d returned empty text", i + 1, page_count)
+        pages.append(page_text)
+
+    text = "\n\n".join(pages)
+    if not text.strip():
+        raise ValueError(
+            "No text extracted from PDF bytes. "
+            "The file may be image-only; use fetch_pdf_text_llm instead."
+        )
+    return text
+
+
+async def fetch_url_text(url: str, timeout: float = 30.0) -> str:
+    """Fetch a URL and return clean extracted text.
+
+    Uses httpx + extract_clean_html from nlp_utils.html.
+
+    Raises:
+        httpx.HTTPError: on network or HTTP failure.
+        ValueError: if extracted text is empty after cleaning.
+    """
+    from nlp_utils.html import extract_clean_html
+
+    logger.info("Fetching URL url=%s", url)
+    async with httpx.AsyncClient(follow_redirects=True, timeout=timeout) as client:
+        response = await client.get(url, headers={"User-Agent": _USER_AGENT})
+    response.raise_for_status()
+
+    text = extract_clean_html(response.text)
+    if not text.strip():
+        raise ValueError(f"No text extracted from URL: {url}")
+    logger.info("Fetched URL url=%s chars=%d", url, len(text))
+    return text
 
 
 async def fetch_pdf_text(url: str, timeout: float = 30.0) -> str:

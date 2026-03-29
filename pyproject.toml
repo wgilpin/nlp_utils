@@ -12,6 +12,8 @@ dependencies = [
     "markdownify>=0.12",
     "nltk>=3.8",
     "pypdf>=4.0",
+    "youtube-transcript-api>=0.6",
+    "yt-dlp>=2024.1",
 ]
 
 [build-system]
