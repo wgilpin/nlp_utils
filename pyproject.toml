@@ -1,6 +1,6 @@
 [project]
 name = "nlp-utils"
-version = "0.1.0"
+version = "0.1.1"
 description = "A utility library package for common NLP routines"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -12,6 +12,7 @@ dependencies = [
     "markdownify>=0.12",
     "nltk>=3.8",
     "pypdf>=4.0",
+    "python-dateutil>=2.8",
     "youtube-transcript-api>=0.6",
     "yt-dlp>=2024.1",
 ]

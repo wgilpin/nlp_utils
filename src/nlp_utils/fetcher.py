@@ -2,6 +2,8 @@
 
 import base64
 import logging
+import re
+from datetime import date
 from io import BytesIO
 
 import httpx
@@ -61,6 +63,34 @@ async def fetch_url_text(url: str, timeout: float = 30.0) -> str:
     return text
 
 
+async def fetch_url_text_with_metadata(
+    url: str, timeout: float = 30.0
+) -> tuple[str, date | None]:
+    """Fetch a URL and return ``(clean_text, publication_date)``.
+
+    Like :func:`fetch_url_text` but also extracts a publication date from the
+    raw HTML before stripping tags (so date markup is available).
+
+    Raises:
+        httpx.HTTPError: on network or HTTP failure.
+        ValueError: if extracted text is empty after cleaning.
+    """
+    from nlp_utils.html import extract_clean_html, extract_publication_date
+
+    logger.info("Fetching URL (with metadata) url=%s", url)
+    async with httpx.AsyncClient(follow_redirects=True, timeout=timeout) as client:
+        response = await client.get(url, headers={"User-Agent": _USER_AGENT})
+    response.raise_for_status()
+
+    raw_html = response.text
+    pub_date = extract_publication_date(raw_html)
+    text = extract_clean_html(raw_html)
+    if not text.strip():
+        raise ValueError(f"No text extracted from URL: {url}")
+    logger.info("Fetched URL url=%s chars=%d pub_date=%s", url, len(text), pub_date)
+    return text, pub_date
+
+
 async def fetch_pdf_text(url: str, timeout: float = 30.0) -> str:
     """Fetch a PDF from *url* and return its full text content via pypdf.
 
@@ -86,7 +116,7 @@ async def fetch_pdf_text(url: str, timeout: float = 30.0) -> str:
             logger.debug("PDF page %d/%d: %d chars", i + 1, page_count, len(page_text))
         pages.append(page_text)
 
-    text = "\n\n".join(pages)
+    text = "\n\n".join(pages).replace("\x00", "")
     if not text.strip():
         raise ValueError(
             f"No text extracted from PDF at {url}. "
@@ -147,3 +177,29 @@ async def fetch_pdf_text_llm(
     result: str = llm_response.choices[0].message.content
     logger.info("LLM extracted %d chars from PDF at url=%s", len(result), url)
     return result
+
+
+_ARXIV_ID_RE = re.compile(r"arxiv\.org/(?:abs|pdf|html)/(\d{4}\.\d{4,5}(?:v\d+)?)")
+
+
+async def fetch_arxiv_text(url: str, timeout: float = 30.0) -> str:
+    """Fetch an arXiv paper and return its full text.
+
+    Accepts any arXiv URL form: abs page, pdf link, or pdf with .pdf extension.
+
+    Args:
+        url: An arXiv URL (e.g. https://arxiv.org/abs/2301.00001).
+        timeout: HTTP request timeout in seconds.
+
+    Raises:
+        ValueError: if *url* is not a recognisable arXiv URL.
+        httpx.HTTPError: on network or HTTP failure.
+    """
+    match = _ARXIV_ID_RE.search(url)
+    if not match:
+        raise ValueError(f"Not a valid arXiv URL: {url!r}")
+
+    paper_id = match.group(1)
+    pdf_url = f"https://arxiv.org/pdf/{paper_id}"
+    logger.info("Fetching arXiv paper id=%s url=%s", paper_id, pdf_url)
+    return await fetch_pdf_text(pdf_url, timeout=timeout)

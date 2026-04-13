@@ -51,6 +51,21 @@ text = asyncio.run(fetch_pdf_text_llm(
 
 ---
 
+#### `fetch_arxiv_text(url, timeout=30.0) -> str`
+
+Fetch an arXiv paper and return its full text. Accepts any arXiv URL form: abstract page, PDF link, or PDF link with `.pdf` extension.
+
+```python
+import asyncio
+from nlp_utils import fetch_arxiv_text
+
+text = asyncio.run(fetch_arxiv_text("https://arxiv.org/abs/2301.00001"))
+```
+
+Raises `ValueError` for non-arXiv URLs. Raises `ValueError` if no text can be extracted (image-only PDF — use `fetch_pdf_text_llm` on the PDF URL instead).
+
+---
+
 ### HTML Parsing
 
 #### `extract_article(html) -> str`

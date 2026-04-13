@@ -1,6 +1,8 @@
 """Tests for HTML parsing utilities."""
 
-from nlp_utils.html import extract_article, extract_clean_html, html_to_markdown
+from datetime import date
+
+from nlp_utils.html import extract_article, extract_clean_html, extract_publication_date, html_to_markdown
 
 _FULL_PAGE = """
 <html>
@@ -74,6 +76,35 @@ class TestExtractCleanHtml:
         html = "<html><body><p>Keep</p><noscript>No JS</noscript></body></html>"
         result = extract_clean_html(html)
         assert "No JS" not in result
+
+
+class TestExtractPublicationDate:
+    def test_medium_story_publish_date(self):
+        html = '<html><body><span data-testid="storyPublishDate">Mar 20, 2017</span></body></html>'
+        result = extract_publication_date(html)
+        assert result == date(2017, 3, 20)
+
+    def test_meta_article_published_time(self):
+        html = '<html><head><meta property="article:published_time" content="2023-06-15T10:00:00Z"></head><body><p>text</p></body></html>'
+        result = extract_publication_date(html)
+        assert result == date(2023, 6, 15)
+
+    def test_time_datetime_attribute(self):
+        html = '<html><body><time datetime="2021-09-01">September 1, 2021</time></body></html>'
+        result = extract_publication_date(html)
+        assert result == date(2021, 9, 1)
+
+    def test_returns_none_when_no_date(self):
+        html = "<html><body><p>No dates here.</p></body></html>"
+        assert extract_publication_date(html) is None
+
+    def test_medium_takes_priority_over_meta(self):
+        html = (
+            '<html><head><meta property="article:published_time" content="2020-01-01"></head>'
+            '<body><span data-testid="storyPublishDate">Mar 20, 2017</span></body></html>'
+        )
+        result = extract_publication_date(html)
+        assert result == date(2017, 3, 20)
 
 
 class TestHtmlToMarkdown:

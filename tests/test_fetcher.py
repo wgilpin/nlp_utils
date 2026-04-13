@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pypdf import PdfWriter
 
-from nlp_utils.fetcher import fetch_pdf_text, fetch_pdf_text_llm
+from nlp_utils.fetcher import fetch_arxiv_text, fetch_pdf_text, fetch_pdf_text_llm
 
 
 def _make_pdf_bytes(pages: list[str]) -> bytes:
@@ -139,3 +139,43 @@ class TestFetchPdfTextLlm:
 
         result = await fetch_pdf_text_llm("https://example.com/doc.pdf")
         assert result == "LLM output text"
+
+
+class TestFetchArxivText:
+    def _make_mock_fetch_pdf_text(self, mocker, text="Arxiv paper text"):
+        mock = AsyncMock(return_value=text)
+        mocker.patch("nlp_utils.fetcher.fetch_pdf_text", mock)
+        return mock
+
+    @pytest.mark.asyncio
+    async def test_abs_url_fetches_pdf(self, mocker):
+        mock = self._make_mock_fetch_pdf_text(mocker)
+        result = await fetch_arxiv_text("https://arxiv.org/abs/2301.00001")
+        assert result == "Arxiv paper text"
+        mock.assert_awaited_once_with("https://arxiv.org/pdf/2301.00001", timeout=30.0)
+
+    @pytest.mark.asyncio
+    async def test_pdf_url_fetches_pdf(self, mocker):
+        mock = self._make_mock_fetch_pdf_text(mocker)
+        result = await fetch_arxiv_text("https://arxiv.org/pdf/2301.00001")
+        assert result == "Arxiv paper text"
+        mock.assert_awaited_once_with("https://arxiv.org/pdf/2301.00001", timeout=30.0)
+
+    @pytest.mark.asyncio
+    async def test_pdf_url_with_extension_fetches_pdf(self, mocker):
+        mock = self._make_mock_fetch_pdf_text(mocker)
+        result = await fetch_arxiv_text("https://arxiv.org/pdf/2301.00001.pdf")
+        assert result == "Arxiv paper text"
+        mock.assert_awaited_once_with("https://arxiv.org/pdf/2301.00001", timeout=30.0)
+
+    @pytest.mark.asyncio
+    async def test_html_url_fetches_pdf(self, mocker):
+        mock = self._make_mock_fetch_pdf_text(mocker)
+        result = await fetch_arxiv_text("https://arxiv.org/html/2603.24645v1")
+        assert result == "Arxiv paper text"
+        mock.assert_awaited_once_with("https://arxiv.org/pdf/2603.24645v1", timeout=30.0)
+
+    @pytest.mark.asyncio
+    async def test_invalid_url_raises_value_error(self, mocker):
+        with pytest.raises(ValueError, match="Not a valid arXiv URL"):
+            await fetch_arxiv_text("https://example.com/notarxiv")
